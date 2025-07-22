@@ -1,6 +1,7 @@
 {
   "name": "pokemon-card-search",
   "version": "1.0.0",
+  "homepage": ".",
   "private": true,
   "dependencies": {
     "@types/node": "^16.18.0",
