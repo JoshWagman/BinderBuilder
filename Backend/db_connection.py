@@ -52,7 +52,7 @@ def index():
 @app.route('/api/search', methods=['GET'])
 def search_endpoint():
     """API endpoint for searching cards"""
-    query = request.args.get('q', '')
+    query = request.args.get('q=name:', '')
     page = int(request.args.get('page', 1))
     page_size = int(request.args.get('pageSize', 20))
     
