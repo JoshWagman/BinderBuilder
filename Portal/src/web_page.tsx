@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { searchPokemonCards } from './api';
 import './App.css';
 
 interface PokemonCard {
@@ -40,27 +41,11 @@ function App() {
       setError('Please enter a search term');
       return;
     }
-
-    setLoading(true);
-    setError(null);
-
     try {
-      const response = await fetch(`/api/search?q=${encodeURIComponent(searchQuery)}&pageSize=20`);
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      
-      const data: SearchResponse = await response.json();
-      
-      if (data.data && Array.isArray(data.data)) {
-        setSearchResults(data.data);
-      } else {
-        setSearchResults([]);
-      }
+      const data = await searchPokemonCards(searchQuery);
+      setSearchResults(data.data || []);
     } catch (err) {
       setError('Failed to fetch cards. Please try again.');
-      console.error('Search error:', err);
     } finally {
       setLoading(false);
     }
