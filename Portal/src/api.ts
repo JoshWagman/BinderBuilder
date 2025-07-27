@@ -27,12 +27,11 @@ export interface SearchResponse {
 }
 
 export async function searchPokemonCards(searchQuery: string): Promise<SearchResponse> {
-  const response = await fetch(`https://api.pokemontcg.io/v2/cards?q=name:${encodeURIComponent(searchQuery)}&pageSize=20`,
+  const response = await fetch(`/api/search?q=name:${encodeURIComponent(searchQuery)}*&pageSize=20`,
   {
     method: "GET",
     headers: {
-      "Accept": "application/json",
-      "X-Api-Key": "12bb73f9-8f57-4d91-a3f1-06d96bafc221"
+      "Accept": "application/json"
     }
   });
 
