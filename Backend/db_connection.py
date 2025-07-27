@@ -1,104 +1,191 @@
-import requests
-from fastapi import FastAPI, Query, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-from typing import List, Optional
-import uvicorn
+import psycopg2
+from psycopg2.extras import RealDictCursor
+import os
+from typing import Optional, Dict, Any, List
+import logging
 
-app = FastAPI(title="Pokemon Card API", description="API for searching Pokemon cards")
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-# Enable CORS
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # React dev server
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-POKEMON_DB_API_KEY = "12bb73f9-8f57-4d91-a3f1-06d96bafc221"
-BASE_URL = "https://api.pokemontcg.io/v2"
-
-headers = {
-    "X-Api-Key": POKEMON_DB_API_KEY
+# Database configuration
+DB_CONFIG = {
+    'host': 'localhost',
+    'port': 5432,
+    'database': 'collections',  # Using your existing collections database
+    'user': 'joshwagman',
+    'password': 'splitgoat'
 }
 
-# Pydantic models for type safety
-class PokemonCard(BaseModel):
-    id: str
-    name: str
-    images: dict
-    set: dict
-    cardmarket: Optional[dict] = None
+class DatabaseConnection:
+    def __init__(self):
+        self.connection = None
+        self.cursor = None
+    
+    def connect(self):
+        """Establish connection to PostgreSQL database"""
+        try:
+            self.connection = psycopg2.connect(**DB_CONFIG)
+            self.cursor = self.connection.cursor(cursor_factory=RealDictCursor)
+            logger.info("Successfully connected to PostgreSQL database")
+            return True
+        except psycopg2.Error as e:
+            logger.error(f"Error connecting to database: {e}")
+            return False
+    
+    def disconnect(self):
+        """Close database connection"""
+        if self.cursor:
+            self.cursor.close()
+        if self.connection:
+            self.connection.close()
+            logger.info("Database connection closed")
+    
+    def execute_query(self, query: str, params: Optional[tuple] = None) -> Optional[List[Dict[str, Any]]]:
+        """Execute a query and return results"""
+        try:
+            if not self.connection or self.connection.closed:
+                if not self.connect():
+                    return None
+            
+            self.cursor.execute(query, params)
+            
+            # Check if the query is a SELECT or has RETURNING clause
+            query_upper = query.strip().upper()
+            if query_upper.startswith('SELECT') or 'RETURNING' in query_upper:
+                results = self.cursor.fetchall()
+                return [dict(row) for row in results]
+            else:
+                self.connection.commit()
+                return None
+                
+        except psycopg2.Error as e:
+            logger.error(f"Error executing query: {e}")
+            if self.connection:
+                self.connection.rollback()
+            return None
 
-class SearchResponse(BaseModel):
-    data: List[PokemonCard]
-    page: int
-    pageSize: int
-    count: int
-    totalCount: int
+    def add_card_to_collection(self, card_data: dict, collection_id: int):
+        """Add a card to the collection"""
+        logger.info(f'card_data: {card_data}')
+        logger.info(f'collection_id: {collection_id}')
+        try:
+            # Extract card information with safe defaults
+            pokemon_card_id = card_data.get('id')
+            logger.info(f'pokemon_card_idawd: {pokemon_card_id}')
+            name = card_data.get('name')
+            logger.info(f'nameawd: {name}')
+            set_name = card_data.get('set', {}).get('name')
+            logger.info(f'set_nameawd: {set_name}')
+            series = card_data.get('set', {}).get('series')
+            logger.info(f'seriesawd: {series}')
+            image_url = card_data.get('images', {}).get('small')
+            logger.info(f'image_urlawd: {image_url}')
+            price = card_data.get('cardmarket', {}).get('prices', {}).get('averageSellPrice')
+            logger.info(f'priceawd: {price}')
 
-def search_cards(query: str, page: int = 1, page_size: int = 20):
-    """Search for Pokemon cards using the API"""
-    try:
-        url = f"{BASE_URL}/cards"
-        params = {
-            "q": query,
-            "page": page,
-            "pageSize": page_size
+            # Validate required fields
+            if not pokemon_card_id or not name:
+                logger.error("Missing required card data: id or name")
+                return {"message": "Missing required card data", "card_id": None}
+            
+            query = """
+                INSERT INTO cards (pokemon_card_id, name, set_name, series, image_url, price, collection_id)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (pokemon_card_id, collection_id) 
+                DO UPDATE SET quantity = cards.quantity + 1
+                RETURNING id
+            """
+
+            logger.info(f'query: {query}')
+            
+            result = self.execute_query(query, (pokemon_card_id, name, set_name, series, image_url, price, collection_id))
+            logger.info(f'result: {result}')
+            if result:
+                return {"message": "Card added to collection successfully", "card_id": result[0]['id']}
+            else:
+                return {"message": "Failed to add card to collection", "card_id": None}
+                
+        except Exception as e:
+            logger.error(f"Error adding card to collection: {e}")
+            return {"message": f"Error adding card to collection: {str(e)}", "card_id": None}
+    
+    def create_tables(self):
+        """Create necessary tables for the BinderBuilder application"""
+        tables = {
+            'collections': """
+                CREATE TABLE IF NOT EXISTS collections (
+                    id SERIAL PRIMARY KEY,
+                    name VARCHAR(255) NOT NULL,
+                    description TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """,
+            'cards': """
+                CREATE TABLE IF NOT EXISTS cards (
+                    id SERIAL PRIMARY KEY,
+                    pokemon_card_id VARCHAR(255) NOT NULL,
+                    name VARCHAR(255) NOT NULL,
+                    set_name VARCHAR(255),
+                    series VARCHAR(255),
+                    image_url TEXT,
+                    price DECIMAL(10,2),
+                    quantity INTEGER DEFAULT 1,
+                    collection_id INTEGER REFERENCES collections(id) ON DELETE CASCADE,
+                    added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(pokemon_card_id, collection_id)
+                )
+            """,
+            'users': """
+                CREATE TABLE IF NOT EXISTS users (
+                    id SERIAL PRIMARY KEY,
+                    username VARCHAR(255) UNIQUE NOT NULL,
+                    email VARCHAR(255) UNIQUE,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """
         }
         
-        response = requests.get(url, headers=headers, params=params)
-        response.raise_for_status()
+        for table_name, query in tables.items():
+            try:
+                self.execute_query(query)
+                logger.info(f"Table '{table_name}' created successfully")
+            except Exception as e:
+                logger.error(f"Error creating table '{table_name}': {e}")
 
-        print('response', response.json())
-        
-        return response.json()
-    except requests.exceptions.RequestException as e:
-        print(f"Error fetching cards: {e}")
-        raise HTTPException(status_code=500, detail="Failed to fetch cards")
+# Global database connection instance
+db = DatabaseConnection()
 
-def get_card_by_id(card_id: str):
-    """Get a specific card by ID"""
-    try:
-        url = f"{BASE_URL}/cards/{card_id}"
-        response = requests.get(url, headers=headers)
-        response.raise_for_status()
-        
-        return response.json()
-    except requests.exceptions.RequestException as e:
-        print(f"Error fetching card {card_id}: {e}")
-        raise HTTPException(status_code=404, detail=f"Failed to fetch card {card_id}")
+def get_db_connection():
+    """Get database connection instance"""
+    return db
 
-@app.get("/")
-async def index():
-    """Root endpoint"""
-    return {"message": "Welcome to Binder Builder!"}
+def init_database():
+    """Initialize database with required tables"""
+    if db.connect():
+        db.create_tables()
+        db.disconnect()
+        logger.info("Database initialization completed")
+    else:
+        logger.error("Failed to initialize database")
 
-@app.get("/api/search")
-async def search_endpoint(
-    q: str = Query(..., description="Search query"),
-    page: int = Query(1, description="Page number"),
-    pageSize: int = Query(20, description="Number of results per page")
-):
-    """API endpoint for searching cards"""
-    if not q:
-        raise HTTPException(status_code=400, detail="Query parameter 'q' is required")
-    
-    result = search_cards(q, page, pageSize)
-    return result
+# Test connection function
+def test_connection():
+    """Test database connection"""
+    if db.connect():
+        result = db.execute_query("SELECT version();")
+        if result:
+            logger.info("Database connection test successful")
+            logger.info(f"PostgreSQL version: {result[0]['version']}")
+        db.disconnect()
+        return True
+    else:
+        logger.error("Database connection test failed")
+        return False
 
-@app.get("/api/card/{card_id}")
-async def get_card_endpoint(card_id: str):
-    """API endpoint for getting a specific card"""
-    result = get_card_by_id(card_id)
-    return result
-
-@app.get("/api/health")
-async def health_check():
-    """Health check endpoint"""
-    return {"status": "healthy", "message": "Pokemon Card API is running"}
-
-if __name__ == '__main__':
-    uvicorn.run(app, host="0.0.0.0", port=5001)
+if __name__ == "__main__":
+    # Test the connection when run directly
+    test_connection()
+    init_database()
 

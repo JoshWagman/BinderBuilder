@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { searchPokemonCards } from './api';
+import { Link } from 'react-router-dom';
+import { searchPokemonCards, addCardToCollection } from './api';
 import './App.css';
 
 interface PokemonCard {
@@ -33,6 +34,7 @@ function App() {
   const [searchResults, setSearchResults] = useState<PokemonCard[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [addingCards, setAddingCards] = useState<Set<string>>(new Set());
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -51,11 +53,42 @@ function App() {
     }
   };
 
+  const handleAddToCollection = async (card: PokemonCard) => {
+    try {
+      setAddingCards(prev => new Set(prev).add(card.id));
+      
+      // Using collection ID 1 (the default collection we created)
+      const result = await addCardToCollection(1, card);
+      
+      // Show success message (you could add a toast notification here)
+      alert(`Successfully added ${card.name} to your collection!`);
+      
+    } catch (err) {
+      console.error('Failed to add card to collection:', err);
+      alert('Failed to add card to collection. Please try again.');
+    } finally {
+      setAddingCards(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(card.id);
+        return newSet;
+      });
+    }
+  };
+
   return (
     <div className="App">
       <header className="App-header">
-        <h1>Pokemon Card Search</h1>
-        <p>Search through thousands of Pokemon cards</p>
+        <div className="header-content">
+          <div className="header-left">
+            <h1>Pokemon Card Search</h1>
+            <p>Search through thousands of Pokemon cards</p>
+          </div>
+          <div className="header-right">
+            <Link to="/collection" className="nav-button">
+              My Collection
+            </Link>
+          </div>
+        </div>
       </header>
 
       <main className="App-main">
@@ -116,6 +149,13 @@ function App() {
                         ${card.cardmarket.prices.averageSellPrice.toFixed(2)}
                       </p>
                     )}
+                    <button
+                      onClick={() => handleAddToCollection(card)}
+                      disabled={addingCards.has(card.id)}
+                      className="add-to-collection-button"
+                    >
+                      {addingCards.has(card.id) ? 'Adding...' : 'Add to Collection'}
+                    </button>
                   </div>
                 </div>
               ))}
