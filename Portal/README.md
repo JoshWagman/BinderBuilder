@@ -16,7 +16,7 @@ A React-based frontend for searching through Pokemon cards using the Pokemon TCG
 
 - Node.js (v14 or higher)
 - Python 3.7 or higher
-- npm or yarn
+- npm
 
 ### Backend Setup
 
