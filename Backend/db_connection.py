@@ -124,11 +124,25 @@ class DatabaseConnection:
     def create_tables(self):
         """Create necessary tables for the BinderBuilder application"""
         tables = {
+            'users': """
+                CREATE TABLE IF NOT EXISTS users (
+                    id SERIAL PRIMARY KEY,
+                    username VARCHAR(255) UNIQUE NOT NULL,
+                    email VARCHAR(255) UNIQUE NOT NULL,
+                    password_hash VARCHAR(255) NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    last_login TIMESTAMP,
+                    is_active BOOLEAN DEFAULT TRUE,
+                    email_verified BOOLEAN DEFAULT FALSE
+                )
+            """,
             'collections': """
                 CREATE TABLE IF NOT EXISTS collections (
                     id SERIAL PRIMARY KEY,
                     name VARCHAR(255) NOT NULL,
                     description TEXT,
+                    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
@@ -146,14 +160,6 @@ class DatabaseConnection:
                     collection_id INTEGER REFERENCES collections(id) ON DELETE CASCADE,
                     added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     UNIQUE(pokemon_card_id, collection_id)
-                )
-            """,
-            'users': """
-                CREATE TABLE IF NOT EXISTS users (
-                    id SERIAL PRIMARY KEY,
-                    username VARCHAR(255) UNIQUE NOT NULL,
-                    email VARCHAR(255) UNIQUE,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """
         }
