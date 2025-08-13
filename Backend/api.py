@@ -4,7 +4,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional
 import uvicorn
+import os
+from dotenv import load_dotenv
 from db_connection import get_db_connection
+
+# Load environment variables
+load_dotenv()
 
 app = FastAPI(title="BinderBuilder API", description="API for Pokemon card collection management")
 
@@ -17,7 +22,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-POKEMON_DB_API_KEY = "12bb73f9-8f57-4d91-a3f1-06d96bafc221"
+POKEMON_DB_API_KEY = os.getenv("POKEMON_DB_API_KEY")
+if not POKEMON_DB_API_KEY:
+    raise ValueError("POKEMON_DB_API_KEY environment variable is not set")
+
 BASE_URL = "https://api.pokemontcg.io/v2"
 
 headers = {

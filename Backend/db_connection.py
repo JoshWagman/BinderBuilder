@@ -3,18 +3,21 @@ from psycopg2.extras import RealDictCursor
 import os
 from typing import Optional, Dict, Any, List
 import logging
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Database configuration
 DB_CONFIG = {
-    'host': 'localhost',
-    'port': 5432,
-    'database': 'collections',  # Using your existing collections database
-    'user': 'joshwagman',
-    'password': 'splitgoat'
+    'host': os.getenv('DB_HOST', 'localhost'),
+    'port': int(os.getenv('DB_PORT', '5432')),
+    'database': os.getenv('DB_NAME', 'collections'),
+    'user': os.getenv('DB_USER', 'joshwagman'),
+    'password': os.getenv('DB_PASSWORD', 'splitgoat')
 }
 
 class DatabaseConnection:
@@ -50,14 +53,22 @@ class DatabaseConnection:
             
             self.cursor.execute(query, params)
             
-            # Check if the query is a SELECT or has RETURNING clause
+            # Check if the query is a SELECT (read-only) or a modification query
             query_upper = query.strip().upper()
-            if query_upper.startswith('SELECT') or 'RETURNING' in query_upper:
+            if query_upper.startswith('SELECT'):
+                # Read-only query, fetch results
                 results = self.cursor.fetchall()
                 return [dict(row) for row in results]
             else:
+                # Modification query (INSERT, UPDATE, DELETE) - always commit
                 self.connection.commit()
-                return None
+                
+                # If it has RETURNING clause, fetch the returned data
+                if 'RETURNING' in query_upper:
+                    results = self.cursor.fetchall()
+                    return [dict(row) for row in results]
+                else:
+                    return None
                 
         except psycopg2.Error as e:
             logger.error(f"Error executing query: {e}")
