@@ -37,18 +37,39 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   useEffect(() => {
     // Check if user is logged in on app start
-    if (token) {
-      fetchUserProfile();
+    const storedToken = localStorage.getItem('token');
+    console.log('AuthContext: Checking stored token:', storedToken ? 'exists' : 'none');
+    console.log('AuthContext: Stored token length:', storedToken ? storedToken.length : 0);
+    console.log('AuthContext: Stored token preview:', storedToken ? storedToken.substring(0, 20) + '...' : 'none');
+    
+    if (storedToken) {
+      console.log('AuthContext: Setting token from localStorage...');
+      setToken(storedToken);
+      console.log('AuthContext: Token state set to:', storedToken ? 'exists' : 'none');
+      // fetchUserProfile will be called in the next useEffect when token changes
     } else {
+      console.log('AuthContext: No stored token, setting loading to false');
       setIsLoading(false);
     }
-  }, [token]);
+  }, []); // Only run once on mount
 
-  const fetchUserProfile = async () => {
+  useEffect(() => {
+    console.log('AuthContext: Token useEffect triggered, token value:', token ? 'exists' : 'none');
+    if (token) {
+      console.log('AuthContext: Token available, fetching user profile...');
+      fetchUserProfile();
+    } else {
+      console.log('AuthContext: No token available, skipping profile fetch');
+    }
+  }, [token]); // Run when token changes
+
+  const fetchUserProfile = async (tokenToUse?: string) => {
+    const tokenValue = tokenToUse || token;
     try {
+      console.log('AuthContext: Fetching user profile with token:', tokenValue ? 'exists' : 'none');
       const response = await fetch('/api/auth/me', {
         headers: {
-          'Authorization': `Bearer ${token}`
+          'Authorization': `Bearer ${tokenValue}`
         }
       });
       
@@ -62,7 +83,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         setUser(null);
       }
     } catch (error) {
-      console.error('Failed to fetch user profile:', error);
       localStorage.removeItem('token');
       setToken(null);
       setUser(null);
@@ -89,10 +109,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       const data = await response.json();
       localStorage.setItem('token', data.access_token);
       setToken(data.access_token);
-      
-      // Fetch user profile
-      await fetchUserProfile();
+      await fetchUserProfile(data.access_token);
     } catch (error) {
+      console.error('AuthContext: Login failed:', error);
       throw error;
     }
   };

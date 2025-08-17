@@ -42,6 +42,9 @@ const App: React.FC = () => {
         .catch(error => {
           console.error('Failed to get user collections:', error);
         });
+    } else {
+      console.log('User or token not available:', { user: !!user, token: !!token });
+      setUserCollectionId(null);
     }
   }, [user, token]);
 
@@ -125,6 +128,15 @@ const App: React.FC = () => {
       </header>
 
       <main className="main-content">
+        {/* Debug info - remove this in production */}
+        {process.env.NODE_ENV === 'development' && (
+          <div style={{ background: '#f0f0f0', padding: '10px', margin: '10px 0', borderRadius: '5px', fontSize: '12px' }}>
+            <strong>Debug Info:</strong> User: {user ? user.username : 'None'} | 
+            Token: {token ? 'Yes' : 'No'} | 
+            Collection ID: {userCollectionId || 'None'}
+          </div>
+        )}
+        
         <div className="search-section">
           <h2>Search Pokemon Cards</h2>
           <form onSubmit={handleSearch} className="search-form">
@@ -162,7 +174,7 @@ const App: React.FC = () => {
                       </button>
                     ) : (
                       <Link to="/login" className="add-to-collection-button login-required">
-                        Login to Add
+                        {user ? 'Loading Collection...' : 'Login to Add'}
                       </Link>
                     )}
                   </div>
