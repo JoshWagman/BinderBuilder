@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from './authContext';
 import { searchPokemonCards, addCardToCollection, getUserCollections } from './api';
 import './App.css';
@@ -22,13 +22,14 @@ export interface PokemonCard {
   };
 }
 
-const App: React.FC = () => {
+export default function WebPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<PokemonCard[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [addingCards, setAddingCards] = useState<Set<string>>(new Set());
   const [userCollectionId, setUserCollectionId] = useState<number | null>(null);
-  const { user, token, logout, isLoading: authLoading } = useAuth();
+  const { user, token, logout, isLoading: authLoading, refreshCountdown, showRefreshWarning } = useAuth();
+  const navigate = useNavigate();
 
   // Get user's collection ID when they log in
   useEffect(() => {
@@ -112,16 +113,23 @@ const App: React.FC = () => {
           </div>
           <div className="header-right">
             {user ? (
-              <>
-                <span className="user-info">Welcome, {user.username}!</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                <span>Welcome, {user.username}!</span>
                 <Link to="/collection" className="nav-button">My Collection</Link>
-                <button onClick={handleLogout} className="nav-button logout-button">Logout</button>
-              </>
+                {showRefreshWarning && refreshCountdown > 0 && (
+                  <div className={`session-indicator ${refreshCountdown <= 60 ? 'critical' : ''}`}>
+                    Session: {Math.floor(refreshCountdown / 60)}:{(refreshCountdown % 60).toString().padStart(2, '0')}
+                  </div>
+                )}
+                <button onClick={handleLogout} className="nav-button">
+                  Logout
+                </button>
+              </div>
             ) : (
-              <>
+              <div style={{ display: 'flex', gap: '15px' }}>
                 <Link to="/login" className="nav-button">Login</Link>
                 <Link to="/register" className="nav-button">Register</Link>
-              </>
+              </div>
             )}
           </div>
         </div>
@@ -186,6 +194,4 @@ const App: React.FC = () => {
       </main>
     </div>
   );
-};
-
-export default App;
+}
